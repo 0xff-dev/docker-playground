@@ -27,7 +27,7 @@
 5. docker start/stop/restart/rm job\_name Start/Stop/Restart/reomove one or more running containers
 6. docker commit $container imgae_name 将容器保存为镜像 [a-z0-9]
 7. docker search/history image_name 查找镜像/查看镜像的历史版本
-8. docker build [options] PATH|URL
+8. docker build [options] PATH|URL(指定上下文环境)
 > --rm=true   构建成功后，移除所有中间容器
 > --no-cache=true 不使用缓存
 9. docker attach container 与运行中的容器进行交互 

@@ -93,3 +93,70 @@ CMD ["npm", "start"]
 # 次级构建
 FROM image-name
 ```
+
+# 操作容器
+1. 启动容器
+> 启动容器有两种情况, 用镜像构建一个容器，把停止的容器重新启动
+```bash
+docker run -it image_name:tag 
+-t 为docke分配一个伪终端, -i 容器的标准输入保持打开
+
+docker container start/stop container_id 启动/停止一个存在的容器
+```
+
+2. 守护态运行
+> 让容器在后台运行 加 -d 参数
+
+3. 进入容器
+> docker attach 在stdin中执行exit，容器也会停止  
+> docker exec -it container\_id bash 进入容器, 带有一个伪终端
+
+4. 导入导出容器
+```bash
+docker export container_id > file.tar 将容器快照导出到本地
+docker save image_name > file.tar 持久化镜像
+从快照导入镜像
+docker import URL/filtar image_name
+docker load < file.tar
+
+```
+> docker import和load 的区别, import 可以重新指定镜像的名字, load不可以
+
+5. 删除容器
+```bash
+docker container rm <container id>
+docker container rm -f <container id> 删除运行中的容器
+docker container prune 清除所有终止的容器
+```
+6. 推向DockerHub
+```bash
+docker login
+docker tag image_name:tag username/image_name:tag
+docker logout
+```
+
+# 数据卷
+* 数据卷 可以在容器之间共享和重用
+
+* 对 数据卷 的修改会立马生效
+
+* 对 数据卷 的更新，不会影响镜像
+
+* 数据卷 默认会一直存在，即使容器被删除
+
+```bash
+docker volume create volume_name 创建数据卷
+docker volume inspect volume_name 查看数据卷的结构
+```
+> 启动一个挂在数据卷的容器, target是数据卷的挂在位置
+```bash
+docker run -d -p \
+       --name we \
+       --mount source=my-vol,targer=/webapp \
+       training/webapp
+       python app.py
+
+docker inspect web 查看web容器的信息(包含volume的信息)
+docker volume rn my-vol 删除数据卷
+docker volume prune 去掉无主的数据卷
+```

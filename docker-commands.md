@@ -160,3 +160,49 @@ docker inspect web 查看web容器的信息(包含volume的信息)
 docker volume rn my-vol 删除数据卷
 docker volume prune 去掉无主的数据卷
 ```
+
+# docker-compose
+> 命令参数说明
+1. -f, --file 指定Compose模版文件,默认是docker-compose.yml
+2. -p --project-name NAME 指定项目的名字, 默认是所在的目录,作为项目的名字
+3. --x-networking 使用 Docker 的可拔插网络后端特性
+4. --x-network-driver DRIVER 指定网络后端的驱动，默认为 bridge
+5. --verbose 输出更过的信息
+6. -v, --version打印版本,并退出
+
+> 命令说明
+1. build ```docker-compose build [options] [services]``` (重新构建项目中的服务容器), 可以随时在项目目录下进行build
+重构的参数
+```bash
+--force-rm 删除构建过程的临时容器
+--no-cache 构建过程不实用cache(这将家常构建时间)
+--pull 尝试pull拉取最新的镜像
+```
+2. config 验证docker-compose.yml文件格式是否正确
+3. down 停止up启动的容器并移除网络
+4. exec 进入指定的容器
+5. images 列出项目使用的镜像
+6. kill 格式为 docker-compose kill [options] [SERVICE...] 通过发送信号,强制停止服务容器
+7. psuse 暂停一个服务容器
+8. ps 列出当前服务的全部容器
+9. push 推送项目的依赖的到Docker仓库
+10. restart 重启项目中的服务 -t  重启超时设置
+11. rm 删除所有停止状态的服务容器, 建议先执行docker-compose stop, 
+参数说明
+-f, --force 强制删除
+-v 删除容器所挂在的数据卷
+12. run 指定服务上执行一个命令, 默认情况下,如果容器有依赖,也会启动 (--no-deps 关闭依赖的自动启动)
+```bash
+docker-compose run ubuntu curl www.google.com
+```
+
+# Compose 模版文件
+1. 注意每个服务都必须通过 image 指令指定镜像或 build 指令（需要 Dockerfile）等来自动构建生成镜像。
+2. build参数
+```yaml
+version: "3"
+services:
+  webapp:
+    build: . // 路径是docker-compose.yml或者绝对路径
+    //或者用context: folder_dockderfile, dockerfile: dockerfile_name
+```

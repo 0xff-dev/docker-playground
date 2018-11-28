@@ -205,4 +205,77 @@ services:
   webapp:
     build: . // 路径是docker-compose.yml或者绝对路径
     //或者用context: folder_dockderfile, dockerfile: dockerfile_name
+    cache_form:
+      - alpine:latest
+      - crop/web_app:3.14
+    cap_add:
+      - ALL
+    cap_drop:
+      - NEWT_ADMIN
+    command:
+      echo "Hello Docker"
+```
+3. cache\_from 指定构建使用的缓存
+4. cap\_drop, cap\_add 指定容器内核能力的分配.
+5. command 覆盖容器启动的默认命令
+6. container\_name 指定容器名称. 
+7. devices: - "/dev/ttyUSB1:/dev/ttyUSB0" 指定设备映射关系
+8. depend\_on 解决容器的启动顺序(web不会等db,redis完全启动,才启动)
+```docker-compose
+version: "3"
+services:
+  web:
+    build: .
+    depend_on:
+      - db
+      - redis
+  redis:
+    image: redis:alpine
+  db:
+    image: postgres
+```
+9. dns
+```docker-compose
+dns: 8.8.8.8
+dns:
+  - 8.8.8.8
+  - 114.114.114.114
+```
+10. expose 容器呗暴漏的端口
+11. external_links链接到composed管理之外的容器
+12. tmpfs 挂在一个tmpfs文件系统到容器
+13. logging 配置日志
+```docker-compose
+logging:
+  driver: syslog
+  options:
+    syslog-address: "tcp://192.168.0.42:123"
+
+driver: "json-file"
+driver: "syslog"
+driver: "none"
+
+options:
+  max-size: "200k"
+  max-file: "10"
+```
+14. network_mode  等价 --network
+15. env_file 从envfile里读取环境变量
+```docker-compose
+env_file: .env
+
+env_file:
+  - ./common.env
+  - ./apps/web.env
+  - /opt/secrets.env
+```
+16. environment
+```docker-compose
+environment:
+  RACK_ENV: development
+  SESSION_SECRET:
+
+environment:
+  - RACK_ENV=development
+  - SESSION_SECRET
 ```

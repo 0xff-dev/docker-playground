@@ -20,7 +20,12 @@ int child_main(void *args) {
     return 1;
 }
 
-// UTS命名空间
+/*
+    ipcmk -Q //创建一个message queue
+    ipcs -q  //查询message queue
+    进入子进程后, 在查询, 找不到目标queue.
+    进程通信隔离
+*/
 int main() {
     printf("程序开始: \n");
     int child_pid = clone(child_main, child_stack+STACK_SIZE, CLONE_NEWIPC|CLONE_NEWUTS|SIGCHLD, NULL);

@@ -142,3 +142,29 @@ int main() {
 * 每个pid namespace第一个进程都是init, 起特殊作用. (管理孤儿)
 * namespace中的进程, 不能kill或者ptrace父进程或兄弟进程.
 * init进程可以屏蔽信号, 在函数中不处理信号, 就直接屏蔽, `防止init被误杀`. 父进程发送的信号, 不是`SIGKILL`, `SIGSTOP`, 都可以忽略.
+* 一旦`init`进程销毁, 同一个`pid namespace`的其他进程收到`sigkill` 信号终止, 如果`/proc/[pid]/ns/pid`处于挂载状态或者是打开状态, 该namespace不会消失,但是保留下来的无法通过`setns`, `fork`创建进程.
+* unshare()在创建了pid namesapce后, 调用者进程不进入namespace, 同样setns也是创建pidnamespace不会进入, 接下来创建的子进程才会进入. 一般来说进程在创建之初, pid是固定的, `getpid`根据所在的`pid namespace`返回PID, 进入新的pidnamespace导致pid发生变化, 可能引起程序崩溃.
+
+### mount namespace
+> 通过隔离文件系统挂载点对隔离文件系统提供支持. 不同的`mount namespace`,文件系统结构不影响,通过`/proc/[pid]/mounts`查看挂载的信息, 创建mountspace时候, 把当前的文件结构都复制进心的namespace, 但是当父命名空间挂载了CD-ROM, 子进程是无法自动挂载的, 所以出现`挂载传播`, 
+
+* 共享挂载
+* 从属挂载
+* 共享/主从挂载
+* 私有挂载
+* 不可绑定挂载
+
+> 传播事件的挂载对象称为`共享挂载`, 接收传播事件的挂载对象称为`从属挂载`, 既不传播也不接受传播事件的挂载称为`私有挂载`, 与私有挂载想再, 不允许执行绑定挂载`不可绑定挂载`
+![mount](images/docker-mount.png)
+> `mount --make-private --make-shared --make-slave --make-unbindable`
+
+### network namespace
+> 主要提供了网络资源的隔离, 一个物理设备最多存在于一个namespace下, 物理设备最初都存在`root namespace`, 如果有多块网卡, 可以将其分配给新的`network namespace`, 当创建的network namespace释放时, 无力网卡反给`root namespace`不是父进程所在的namespace. 关于新旧的namespace如何通信, `veth pair`建立两个namespace的通信, 在开始的时候,使用`pipe` , `docker dameon`负责创建`veth pair`, `docker daemon`和`init`就是通过`pipe`通信, 在docker完成创建`veth`之前, init在另一端循环等待. 收到设备信息, 启动`eth0`.
+![docker-network](images/docker-network.png)
+
+### user namespace
+> `user namespace`主要隔离了相关的标识符和属性. 一个用户通过clone进入新的user namespace可以拥有不同的用户和用户组.
+* usernamespace创建之后, 第一个进程赋予了全部的权限, 这样init可以完成全部的初始化工作, 不会出现权限不足导致无法完成.
+* usernamespace内部的用户需要与外部简历映射, 可以保证设计一些对外部的操作时候, 可以检验其权限, 用户组也是同样的道理
+* 用户在新的user namespace里拥全部的权限, 但是在创建他的父进程namespace中, 不含任何权限, 
+* usernamespace与其他的命名空间一同使用, 依旧需要root.解决方案, 以普通用户创建`user nameapce`, 在新的namespace作为root, 然后clone加入其他的命名空间

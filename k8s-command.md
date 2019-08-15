@@ -68,4 +68,49 @@ kubectl exec pods_name -n namespace_name bash // 容器有终端的情况， 启
 7. k8s Services
 - 提供固定的IP，由于Pod可以随时停止启动，Pod的IP随时变化，`Service` 为Pods提供固定的IP，其他的服务可以通过Service Ip找到提供服务的pods
 - 提供负载均衡, Service由多个Pods组成，k8s对组成Service的Pods提供堵在均衡方案。随机访问等。
-- 服务发现，集群中其他的服务可以哦通过service的名字访问后端服务。也可以通过环境变量访问。
+- 服务发现，集群中其他的服务可以通过service的名字访问后端服务。也可以通过环境变量访问。
+
+- 创建service
+```
+可以通过kubectl create -f 创建，deployment更快捷的方式
+kubectl expose deployment nginx(deployment_name) --port 80 -n namespace
+创建一个nginx的service，端口使用80，如果想要外部暴露的非80，使用如下命令
+kubectl expose deployment nginx --port 8080 --target-port 80 -n namespace_name
+外部8080映射到80端口
+
+kubectl get svc nginx -n namespace_name 查看ns下面的名字=nginx的service的信息
+
+kubectl describe svc nginx -n namespace_name 
+Name:              nginx
+Namespace:         tutorial
+Labels:            run=nginx
+Annotations:       <none>
+Selector:          run=nginx
+Type:              ClusterIP
+IP:                10.96.6.136
+Port:              <unset>  80/TCP
+TargetPort:        80/TCP
+Endpoints:         172.17.0.11:80
+Session Affinity:  None
+Events:            <none>
+其中Endpoints 表明Service选中的PodIP:PodPort
+```
+
+- NodePort Service
+```
+上述创建的service只能被集群内部的节点和Pod访问，可以通过NodePort和LoadBalancer两种形式暴露服务
+kubectl expose deployment nginx --port 80 --type NodePort -n namespace_name
+kubectl get svc nginx -n ns 查看暴露的端口
+```
+
+8. k8s Label
+> Service通过`selector & label`选取他所管理的Pod，Deployment也是通过`selector & label`管理Pod，r如果让service 选择与deployment相同的pod，那么需要将service的selector与deployment相同label可以在创建的时候添加，也可以在运行时添加或修改。运行时修改会影响集群的状态，selector和label的结构会发生改变。
+
+- Label operations
+> kubectl支持对资源的labels进行管理，通过-l选项查看近具有某个label的资源
+```
+kubectl get pods -l run=nginx -n namespace_name // 获取有run=nginx label的pods
+kubectl get svc -l run=nginx -n namespace_name  // 获取svc的selector为run=nginx 的svc
+给pod增加label
+kubectl label pod pod_name label_name -n namespace
+```

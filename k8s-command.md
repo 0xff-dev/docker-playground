@@ -114,3 +114,99 @@ kubectl get svc -l run=nginx -n namespace_name  // 获取svc的selector为run=ng
 给pod增加label
 kubectl label pod pod_name label_name -n namespace
 ```
+
+9. k8s Deployment Operations
+> 水平扩展和更新应用
+> 通过调整Deployment的副本数量，将Pod的数量调整为4个，
+```
+kubectl scale deployment nginx --replicas=4 -n nameapsce 扩展,在扩展完成后，services会感知到pod，自动将endpointe扩展为4个
+```
+
+> 更新应用, k8s回启动一个新的pod，同时会停止一个老的pod，service会停止向老的pod导流
+```
+kubectl set image deployments nginx nginx=image_path -n namespace
+
+kubectl rollout status deployment nginx -n namespace // 查询deployment的部署情况,
+// 如果想回到前一个版本
+kubectl rollout undo deploymennt nginx -n namespace // 将nginx返回到上一个版本
+```
+
+10. yaml/json 文件
+> yaml文件分为五个部分，`apiVersionn`, `metadata`, `spec`, `status`, `kind`, 其中apiVersion表明当前k8s api的分组，kind表明当前操作的资源类型
+> metadata是资源的元数据，对于美中资源都是固定的，例如资源的名字，namespace，label等。spec是用户对资源的说明书，对资源的各种配置信息，status是当前资源的状态，
+> k8s 会尽最大努力使得spec和status匹配，
+```yml
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: "2019-06-28T10:10:10Z"
+  generateName: ngxin-12345
+  labels: 
+  name: ngxin-12345
+  owneReferences:
+  resourceVersion: "28590"
+  selfLink: "/api/v1/namespaces/ns/pods/nginx-12345"
+  uid: "1dffsdfdlkdf"
+spec:
+  containers:
+  dnsPloicy: ClusterFirst
+  enableServiceLinks: true
+  nodeName: minikube
+  priority: 0
+  restartPolicy: Always
+  schedulerName: default-scheduler
+status:
+  conditions:
+  containerStatuses:
+  hostIP: 10.10.10.10
+  phase: Running
+  podIP: 172.17.0.8
+  qosClass: Brustable
+  startTime: "2019-06-28T10:10:10Z"
+```
+
+11. yaml学习
+> 通过-o yaml获取已经部署的资源的yaml文件
+```
+kubectl get pods pod_name -n namespace -o yaml
+kubectl get svc svc_name nginx -n ns -o yaml
+```
+
+12. 从yaml创建资源
+```
+kubectl create -f yaml_path -n ns
+
+// 更新yaml文件，并返回给k8s
+kubectl apply -f yaml_path -n ns
+```
+
+13. k8s events
+> k8s events 显示了集群中所有的事件，不同于资源，events是由k8s系统组件创建的，用来提示用户集群发生的各种事件，默认情况下集群事件由TTL，超过TTL事件会被删除
+```
+kubectl get events -n ns
+```
+
+14. Pod 生命周期
+- Pod Phase
+- Pod Condition
+- Restart Ploicy
+- Container probes
+
+> `Restart Policy` 值Pod内容执行出错或者执行完毕是否要进行重启
+> `Container probes` 分为两种，`LivenessProbe`和`ReadinessProbe`. `Liveness`检查应用是否依然健康无措，有错误则k8s会根据policy重启或者仅更新状态. `Readiness`
+> 检查应用是否可以对外提供服务. 若检查不通过，则会把pod从资源池删除
+
+
+15. configMap & Secret
+> `ConfgiMap`是用来管理配置信息的资源类型，可以单独创建ConfigMap，在将ConfigMap挂载到Pod，实现配置和应用分离. ConfgiMap可以通过yaml来创建
+```
+kubectl create confgimap game-config --from-file=file_path --from-file=file_path -n ns
+
+kubectl get configmap game-config -o wide -n ns
+
+kubectl describe game-config -n ns
+
+// 查看配置文件
+kubectl get configmap game-config -n ns -o yaml
+```
+> secret 使用和ConfigMap相似，这是内容加密

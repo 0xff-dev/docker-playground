@@ -1,3 +1,5 @@
+# 第一阶段
+
 1. `kubectl version`
 2. 命令格式: `kubectl <action> <resource>`, `action`一般包括`create, delete,get`,`resource`可以通过`kubectl api-resources`查看
 3. `kubectl`通过读取配置文件与集群交互，默认路径`~/.kube/config`
@@ -210,3 +212,190 @@ kubectl describe game-config -n ns
 kubectl get configmap game-config -n ns -o yaml
 ```
 > secret 使用和ConfigMap相似，这是内容加密
+
+
+# 第二阶段
+1. k8s执行流程
+> 通过Kubectl提交一个创建RC的请求，该请求通过APIServer被写入etcd中，此时Controller Manager通过
+> API Server的监听资源变化的接口监听到这个RC事件，分析之后，发现当前集群中还没有它所对应的Pod实例，
+> 于是根据RC里的Pod模板定义生成一个Pod对象，通过APIServer写入etcd，接下来，此事件被Scheduler发现，
+> 它立即执行一个复杂的调度流程，为这个新Pod选定一个落户的Node，然后通过API Server讲这一结果写入到etcd中，
+> 随后，目标Node上运行的Kubelet进程通过APIServer监测到这个“新生的”Pod，并按照它的定义，启动该Pod并
+> 任劳任怨地负责它的下半生，直到Pod的生命结束。随后，我们通过Kubectl提交一个新的映射到该Pod的
+> Service的创建请求，ControllerManager会通过Label标签查询到相关联的Pod实例，然后生成Service的
+> Endpoints信息，并通过APIServer写入到etcd中，接下来，所有Node上运行的Proxy进程通过APIServer查询并监听
+> Service对象与其对应的Endpoints信息，建立一个软件方式的负载均衡器来实现Service访问到后端Pod的流量转发功能。
+> 在集群中`Master`节点由4个进程`api-server`, `controller manager`, `etcd`, `scheduler`
+>APIServer: APIServer负责对外提供RESTful的Kubernetes API服务，
+> 它是系统管理指令的统一入口，任何对资源进行增删改查的操作都要交给
+> APIServer处理后再提交给etcd。如架构图中所示，kubectl（Kubernetes提供的客户端工具，
+> 该工具内部就是对Kubernetes API的调用）是直接和APIServer交互的。
+
+> schedule: scheduler的职责很明确，就是负责调度pod到合适的Node上。如果把scheduler看成一个黑匣子，
+> 那么它的输入是pod和由多个Node组成的列表，输出是Pod和一个Node的绑定，即将这个pod部署到这个Node上。
+> Kubernetes目前提供了调度算法，但是同样也保留了接口，用户可以根据自己的需求定义自己的调度算法。
+> controller manager: 如果说APIServer做的是“前台”的工作的话，那controller manager就是负责“后台”的。
+> 每个资源一般都对应有一个控制器，而controller manager就是负责管理这些控制器的。比如我们通过APIServer
+> 创建一个pod，当这个pod创建成功后，APIServer的任务就算完成了。而后面保证Pod的状态始终和我们预期的一样
+> 的重任就由controller manager去保证了。
+
+> etcd: etcd是一个高可用的键值存储系统，Kubernetes使用它来存储各个资源的状态，从而实现了Restful的API。
+
+> Node
+
+>每个Node节点主要由三个模块组成：kubelet、kube-proxy、runtime。
+
+> runtime。runtime指的是容器运行环境，目前Kubernetes支持docker和rkt两种容器。
+
+> kube-proxy。该模块实现了Kubernetes中的服务发现和反向代理功能。反向代理方面：kube-proxy支持TCP和UDP连接转发，默认基于Round
+> Robin算法将客户端流量转发到与service对应的一组后端pod。服务发现方面，
+> kube-proxy使用etcd的watch机制，监控集群中service和endpoint对象数据的动态变化，并且维护一个service到endpoint的映射关系，
+> 从而保证了后端pod的IP变化不会对访问者造成影响。另外kube-proxy还支持session affinity。
+
+> kubelet。Kubelet是Master在每个Node节点上面的agent，是Node节点上面最重要的模块，它负责维护和管理该Node上面的所有容器，
+> 但是如果容器不是通过Kubernetes创建的，它并不会管理。本质上，它负责使Pod得运行状态与期望的状态一致。
+
+2. Pod的生命周期
+> `Replication Conntroller (RC)` 是k8s的另一个核心概念应用托管在k8s后，RC要保证任何时间
+> k8s中有指定数量的Pod在运行, 此外还有滚动升级，升级回滚等
+> Pod的声明周期包括：通过模版定义，分配到一个Node上运行，就不会离开这个Node，直到被删除。Pod失败，会被k8s清理，重建后的Pod ID会发生变化，k8s中Pod的迁移实际是指在新的Node上重建Pod
+
+3. Pod通信
+```
+同一个Node内，通过Veth连在同一个docker0网桥上，他们的IP是从docker0网桥上自动获取的，他们和网桥本身IP3在同一个网段
+
+不同NOde的pod通信
+对docker0的IP地址统一规划，对Pod的IP地址做统一的规划。
+
+Pod到service的通信
+Service的虚拟IP通过每个Node上的kube-proxy映射到不同的pod上，目前只支持轮训
+```
+
+4. Label 增删改
+```
+kubectl label pod pod_name role=backend // 添加label
+kubectl label pod pod_name role- // 删除label
+kubectl lable pod pod_name role=abc -overwrite // 更改一个label的值 
+```
+
+5. 创建pod的流程
+```
+1. 用户通过REST API 创建Pod
+2. apiserver将其写入etcd中
+```
+
+6. questions
+- Master 与 Node通信
+> Nodes -> Master 每个Node都应该配置集群的公共根证书，以便安全的连接到api-server
+> master组件通过非加密的端口与集群api-server通信。这个端口只在localshot报漏
+> Master -> Node 从master到node有两条路径第一种是通过apiserver到node的kubelet进程。第二种是通过apiserver的代理功能从apiserver到任何node，pod和service
+
+7. 核心组件
+- etcd
+```
+主要功能:
+基于k-v的存储
+监听机制
+k的过期及续约机制
+原子CAS, CAD  用于分布式锁和leader的选举
+```
+
+- api-server
+```
+提供集群管理的REST API接口，包括认证授权，数据校验以及集群状态变更
+提供其他模块之间数据交互和通信的枢纽， 其他模块通过api-server查询或者修改数据，只有ai-server去操作etcd
+
+访问控制
+1. 认证
+开启TLS，所有的请求都需要先认证，k8s有多种认证机制，支持同时开启多个认证插件，认证成功用户名会传入授权模块，认证失败则返回401
+
+2. 授权
+认证之后到授权模块，k8s支持多种授权机制，支持开启多个授权插件，授权成功，怎会发送请求到准入控制模块，否则返回403
+
+3. 准入控制
+
+```
+
+- scheduler
+```
+scheduler是调度pod到node节点上，该模块监听api-server，查询还未分配到node的pod
+分配考虑的因素
+1. 公平调度
+2. 资源利用效率
+3. Qos
+4. affinity 和 anti-affinity
+5. 数据本地化
+6. 内部负载干扰
+7. deadlines
+
+指定Pod运行在指定的Node节点上
+1. 给node打标签，在daemonset中设置
+kubectl lable nodes node-01 disktype=ssd
+spec:
+  nodeSelector:
+    disktype: ssd
+
+2. nodeAffinity
+nodeAffinity 目前支持两种 requiredDuringSchedulingIgnoreDurlingExecution,
+preferredDurlingfSchedulingIgnoreDurlingExecution分别代表满足条件和优选条件
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: with-node-affinity
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: kubernetes.io/e2e-az-name
+            operator: In
+            values:
+            - e2e-az1
+            - e2e-az2
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 1
+        preference:
+          matchExpressions:
+          - key: another-node-label-key
+            operator: In
+            values:
+            - another-node-label-value
+  containers:
+  - name: with-node-affinity
+    image: gcr.io/google_containers/pause:2.0
+
+表示调度到带有标签kubernetes.io/e2e-az-name 并且值为e2e-az1火e2e-az2的Node上，并且优选带有标签another-node-label-key=node-label-value
+
+
+3. podAffinity, podAntiAffinity
+如果一个"Node 所在的空间至少包含一个带有标签security=s1并且运行中的pod", 那么可以调度
+不能调度到 "包含至少一个带有security并且运行中的Pod"的node上
+
+4. Taints和tolerations
+用于保证pod不被调度到不合适的node上，taint应用于node上，tolerations应用于pod上
+
+
+5. 优先级调度
+v1.11默认开启，其他版本配置
+apiserver --feature-gates=PodPriority-true和 --runtime-config=scheduling.k8s.io/v1alpha1=true
+scheduler 配置 --feature-gates=PodPriority=true
+
+调度过程
+分为predicate(过滤掉不符合条件的节点)和priority(优先级排序，选择优选级较高的节点)阶段
+```
+
+- controller-manager
+```
+controller 由kube-controller-manager和cloud-controller-manager组成，通过api-server监控集群的状态
+
+Metrics
+controller manager metrics提供了内部逻辑的性能度量，默认监听在10252端口，通过
+http://localhost:10252/metrics 访问
+
+高可用
+启动时设置--leader-elect=true,controller manager会使用多节点选主的方式选择主节点，主节点调用StartControllers() 启动所有控制器，其他节点只是执行选取算法
+
+高性能
+```

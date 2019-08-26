@@ -284,13 +284,7 @@ kubectl lable pod pod_name role=abc -overwrite // 更改一个label的值
 2. apiserver将其写入etcd中
 ```
 
-6. questions
-- Master 与 Node通信
-> Nodes -> Master 每个Node都应该配置集群的公共根证书，以便安全的连接到api-server
-> master组件通过非加密的端口与集群api-server通信。这个端口只在localshot报漏
-> Master -> Node 从master到node有两条路径第一种是通过apiserver到node的kubelet进程。第二种是通过apiserver的代理功能从apiserver到任何node，pod和service
-
-7. 核心组件
+6. 核心组件
 - etcd
 ```
 主要功能:
@@ -399,3 +393,37 @@ http://localhost:10252/metrics 访问
 
 高性能
 ```
+
+- 需要了解知识
+1. Master
+> Nodes -> Master 每个Node都应该配置集群的公共根证书，以便安全的连接到api-server
+> master组件通过非加密的端口与集群api-server通信。这个端口只在localshot报漏
+> Master -> Node 从master到node有两条路径第一种是通过apiserver到node的kubelet进程。第二种是通过apiserver的代理功能从apiserver到任何node，pod和service
+
+2. Master组件
+   - Apiserver k8s如何接受请求以及如何返回结果给客户端
+   > api-server 提供http和https两种rest api形式供使用，用户访问需要经历认证，授权，准入三个部分
+   - etcd 主要功能机制
+   > k-v 存储机制， 监听机制, k 的过期及续约机制，用于监控和服务发现，原子CAS和CAD，用于分布式锁和leader选举
+   > leader选举方法： 初始启动节点处于follow状态，并设定一个eletion time，在这个时间段内没有发现来自leader的heartbeat，发起选举，自己变成candidate状态，向集群中其他followers发送请求，询问自己石是否可以为leader. 超过集群中一半的投票则称为leader，然后收集client的日志数据，向其他的followers同步日志。leader靠发送heartbeat保持地址。每一个新的leader都会比前一任任期+1. 
+   > 日志复制
+   > 当前leader收到客户端的日志，先把日志追加到本地的log中，然后通过heartbeat把entry同步给其他的followers，followers收到后返回ACK确认，leader收到大多数ack信息后将该日志设置为已提交并追加到本地磁盘中。通知客户端并在下一个heartbeat中，leader将通知所以的followers将日志存储在本地磁盘.
+   > 安全性 
+   > 安全性是用于保证每个节点都执行相同序列的安全机制，如当某个 Follower 在当前 Leader commit Log 时变得不可用了，稍后可能该 Follower 又会被选举为 Leader，这时新 Leader 可能会用新的 Log 覆盖先前已 committed 的 Log，这就是导致节点执行不同序列；Safety 就是用于保证选举出来的 Leader 一定包含先前 committed Log 的机制. 1⃣️选举安全性：每个任期只能选出一个leader。2⃣️Leader完整性： 指leader日志完整性，当 Log 在任期 Term1 被 Commit 后，那么以后任期 Term2、Term3… 等的 Leader 必须包含该 Log；Raft 在选举阶段就使用 Term 的判断用于保证完整性：当请求投票的该 Candidate 的 Term 较大或 Term 相同 Index 更大则投票，否则拒绝该请求。
+   > 失效处理
+   > 1) Leader 失效：其他没有收到 heartbeat 的节点会发起新的选举，而当 Leader 恢复后由于步进数小会自动成为 follower（日志也会被新 leader 的日志覆盖
+   > 2) follower 节点不可用：follower 节点不可用的情况相对容易解决。因为集群中的日志内容始终是从 leader 节点同步的，只要这一节点再次加入集群时重新从 leader 节点处复制日志即可。
+   > 3）多个 candidate：冲突后 candidate 将随机选择一个等待间隔（150ms ~ 300ms）再次发起投票，得到集群中半数以上 follower 接受的 candidate 将成为 leader
+   - controller manager
+   > 有kube-controller-manager和cloud-controller-manager组成，通过api-server架空整个集群状态。
+   > kube-controller-manager必须启动的控制器
+   > EndpointController, ReplicationController, PodGCController,ReousrceQuotaCOntroller, NamespacesController, ServieAccountController, GarbageCollectorController, DaemonSetController, JobController, DeploymentController, ReplicaSetontroller, HPAController, DisruptionController, StatefulSetController, CronJobController, CSRSigningController, CSRApprovingController, TTLController
+   > 默认启动的可选控制器  
+   > TokenController, NodeController, ServiceController, RouteController. PVBinderController, AttachDetachController.
+   > 默认禁止的控制器
+   > BootstrapSignerController, TokenCleanerController
+   > `list-watch`原理
+   > api-server作为统一入口，任何对数据操作都要经过api-server，list-watch可分为2个，list api和watch api。k8s的informer模块封装list-watch，informer首先通过list api罗列资源，然后调用watch api监听变更事件, 将结果放入到一个FIFO的队列，队列的另一段从协程去除事件，并调用注册的函数处理。watch监听机制的实现则是通过HTTP/1.1的`分块传输编码`
+   - Scheduler
+   > 监控api-server，将为分配的pod分配到node，有三种方式
+   > `nodeSelector`: 只调度到匹配指定label的node上，`nodeAffinity` 功能更丰富的NOde选择器，支持集合操作。`podAffinity`调度到满足条件的Pod所在的 node上。

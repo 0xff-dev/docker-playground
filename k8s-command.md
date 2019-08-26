@@ -427,3 +427,11 @@ http://localhost:10252/metrics 访问
    - Scheduler
    > 监控api-server，将为分配的pod分配到node，有三种方式
    > `nodeSelector`: 只调度到匹配指定label的node上，`nodeAffinity` 功能更丰富的NOde选择器，支持集合操作。`podAffinity`调度到满足条件的Pod所在的 node上。
+3. Node组件
+   - Kubelet
+   > 每个节点上都有一个kubelet服务进程，默认监听10250端口，接受并执行master发来的指令。管理Pod及pod中的容器
+   > 向kubelet提供节点上需要运行的pod的清单
+   > 文件：启动参数 --config只从的配置目录下的文件(default /etc/kubernetes/manifests),该文件每20秒重新检查一次，可配置
+   > HTTP endpoint：启动参数 --manifest-url 设置，每20秒检查一次这个端点
+   > api server: 通过api-server监听etcd目录，同步pod清单
+   > http server: kubelet监听http请求，并响应简单的api

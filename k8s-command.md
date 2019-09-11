@@ -435,3 +435,30 @@ http://localhost:10252/metrics 访问
    > HTTP endpoint：启动参数 --manifest-url 设置，每20秒检查一次这个端点
    > api server: 通过api-server监听etcd目录，同步pod清单
    > http server: kubelet监听http请求，并响应简单的api
+   - Pod清单管理
+   > 向kubelet提供pod清单的方法。
+   > 文件，启动参数 --config指定配置文件目录下的文件(默认是/etc/kuberbetes/manifests), 每20秒检查一下
+   > HTTP endpoint， 启动参数 --manifest-url 设置每20秒检查以次
+   > API  Server 通过api-server监听etcd，同步Pod清单
+   > HTTP server kubelet侦听http请求，并响应api以提交新的pod
+   - kubelet通过apiserver获取及创建Pod
+   > kubelet通过api-server使用`watch`+`list`的方式去监听`/registry/nodes/{当前节点名}`,`/register/pods`将获取到的信息存储到本地。kubelet去监听etcd，所有的pod操作都会被kubelet看到，发现有新的pod绑定到本节点，按照清单创建pod。kubelet读取到监听信息，作如下处理
+   1. 为pod创建数据目录
+   2. 从 api-server读取该pod清单
+   3. 为pod挂在外部卷
+   4. 下载pod到secret
+   5. 检查在节点上运行的pod，pod没有容器或者Pause容器没有启动，则先停止容器的进程，如果pod中有需要删除的容器，则删除这些容器
+   6. 用kuberbetes/pause 镜像为每个容器创建一个Pause容器，Pause容器用来接管其他容器的网络。新建pod都会先创建一个Pause容器。
+   
+   - 容器运行时
+   > 真正管理镜像和容器的生命周期
+
+   - kube-proxy
+   > kube-proxy支持以下几种形式的实现
+   > userspace: 在用户空间监听一个端口，所有服务通过iptables转发到端口，由内部负载均衡转到实际pod。
+   > iptables: 完全以iptables规则实现service的负载均衡，会产生太多的iptables的规则，
+
+
+4. Autoscaling(HPA Horizontal Pod Autoscaling)
+> 根据cpu的使用频率或者应用自定义 metrics 自动扩展Pod的数量
+> 为容器配置CPU Request， HPA设置值恰当，70%给容器和应用，预留30%余量，保持Pod和Node健康。保证用户负载均衡。
